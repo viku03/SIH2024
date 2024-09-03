@@ -4,6 +4,7 @@ Recommended to create a virtual environment.
 Run this initially
 ```bash
 pip install -r requirements.txt
+cd WebDev
 ```
 ## dummy_data - 
 A flask server that generates continuous data. \
