@@ -1,240 +1,186 @@
 
-import requests
 import streamlit as st
+import requests
 import pandas as pd
-import numpy as np
-import pydeck as pdk
 import json
+import pydeck as pdk
 import time
-API_KEY = 'aca430e0c725352d8b8c78555a0c7f62'  # Replace with your OpenWeatherMap API key
-CITY = 'Chennai'
-BASE_URL = 'http://api.openweathermap.org/data/2.5/'
 
-url = "http://127.0.0.1:5000/data" 
-def fetch_weather_data():
-    weather_url = f"{BASE_URL}weather?q={CITY}&appid={API_KEY}&units=metric"
-    response = requests.get(weather_url)
-    data = response.json()
-    return {
-        "temperature": data["main"]["temp"],
-        "humidity": data["main"]["humidity"],
-        "pressure": data["main"]["pressure"],
-        "weather_description": data["weather"][0]["description"]
+# Set page config
+st.set_page_config(page_title="Real-time Environmental Monitoring", layout="wide")
+
+# Custom CSS for pastel colors and prettier design
+st.markdown("""
+<style>
+    
+    .metric-card {
+        background-color: #ffffff;
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
-
-def fetch_uv_index():
-    latitude, longitude = 13.0827, 80.2707
-    uv_url = f"{BASE_URL}uvi?lat={latitude}&lon={longitude}&appid={API_KEY}"
-    response = requests.get(uv_url)
-    data = response.json()
-    return data["value"]
-
-st.set_page_config(page_title="Chennai Environmental Monitoring", layout="wide")
-
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-    .metric-box {
-        border-radius: 5px;
+    .metric-label {
+        font-size: 14px;
+        color: #718096;
+    }
+    .metric-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #4a5568;
+    }
+    .status-card {
+        border-radius: 10px;
         padding: 10px;
-        margin: 30px;
         text-align: center;
-        font-size: 25px;
-        color: white;
-        width: 600px;
-        opacity: 0.8;
-        word-spacing: 4px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        font-family: 'Roboto', sans-serif;
     }
-    .uv_intensity { background-color: #FFC300; }
-    .temperature { background-color: #FF5733; }
-    .humidity { background-color: #33C1FF; }
-    .pressure { background-color: #003366; }
-    .air_quality { background-color: #900C3F; }
-    </style>
-    """, unsafe_allow_html=True
+    .status-critical {
+        background-color: #fed7d7;
+        color: #9b2c2c;
+    }
+    .status-warning {
+        background-color: #feebc8;
+        color: #9c4221;
+    }
+    .status-ok {
+        background-color: #c6f6d5;
+        color: #2f855a;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Define thresholds for each parameter
+TEMP_CRITICAL, TEMP_WARNING = 80, 60
+UV_CRITICAL, UV_WARNING = 8, 5
+HUMIDITY_CRITICAL, HUMIDITY_WARNING = 90, 70
+PRESSURE_CRITICAL, PRESSURE_WARNING = 1020, 1000
+AIR_QUALITY_CRITICAL, AIR_QUALITY_WARNING = 150, 100
+
+# Define functions for colors based on temperature
+def get_temperature_color(temp):
+    if temp < 50:
+        return [173, 216, 230]  # Light Blue for cool
+    elif temp < 60:
+        return [144, 238, 144]  # Light Green for moderate
+    return [255, 182, 193]      # Light Pink for hot
+
+# Flask server URL
+url = "http://127.0.0.1:5000/data"  # Example Flask URL
+
+# DataFrame to store monitoring point data
+map_data = pd.DataFrame(columns=['lat', 'lon', 'temperature', 'uv', 'humidity', 'pressure', 'airQuality', 'color'])
+
+# Main Dashboard Layout
+st.title("Real-time Environmental Monitoring Dashboard")
+
+# Real-time data cards
+st.markdown("### Real-time Environmental Data (Averages)")
+col_temp, col_uv, col_hum, col_press, col_air = st.columns(5)
+
+# Initialize placeholder metrics
+temp_metric = col_temp.empty()
+uv_metric = col_uv.empty()
+hum_metric = col_hum.empty()
+press_metric = col_press.empty()
+air_metric = col_air.empty()
+
+# Map initialization
+initial_view = pdk.ViewState(latitude=11.0, longitude=78.0, zoom=6)
+
+# Create empty map chart
+scatterplot_layer = pdk.Layer(
+    "ScatterplotLayer",
+    data=map_data,
+    get_position='[lon, lat]',
+    get_fill_color='color',
+    get_radius=5000,
+    pickable=True,
 )
 
-st.sidebar.header("Menu")
-menu = st.sidebar.radio("Navigate", ['Home', 'Status Monitoring Points', 'Warning List'])
+deck = pdk.Deck(
+    initial_view_state=initial_view,
+    layers=[scatterplot_layer],
+    map_style='mapbox://styles/mapbox/dark-v10',
+    tooltip={"text": "Temp: {temperature}°F, UV: {uv}, Humidity: {humidity}%, Air Quality: {airQuality}"}
+)
 
-st.sidebar.header("Filters")
-st.sidebar.selectbox("Select Zone", ["All zones", "Zone 1", "Zone 2"])
-st.sidebar.text_input("Monitoring Point Search")
+map_chart = st.pydeck_chart(deck)
 
-weather_data = fetch_weather_data()
-uv_index = fetch_uv_index()
+# Function to classify points based on threshold values
+def classify_points(data):
+    critical_count = sum((data['temperature'] >= TEMP_CRITICAL) | (data['uv'] >= UV_CRITICAL) | 
+                         (data['humidity'] >= HUMIDITY_CRITICAL) | (data['pressure'] >= PRESSURE_CRITICAL) | 
+                         (data['airQuality'] >= AIR_QUALITY_CRITICAL))
+    warning_count = sum((data['temperature'] >= TEMP_WARNING) | (data['uv'] >= UV_WARNING) | 
+                        (data['humidity'] >= HUMIDITY_WARNING) | (data['pressure'] >= PRESSURE_WARNING) | 
+                        (data['airQuality'] >= AIR_QUALITY_WARNING)) - critical_count
+    ok_count = len(data) - critical_count - warning_count
+    return critical_count, warning_count, ok_count
 
-map_data = pd.DataFrame(columns=['lat', 'lon', 'temperature', 'color'])
+# Status section
+st.markdown("### Status of Monitoring Points")
+col1, col2, col3 = st.columns(3)
+critical_metric = col1.empty()
+warning_metric = col2.empty()
+ok_metric = col3.empty()
 
-# Define color scale based on temperature
-def get_color(temperature):
-    if temperature < 50:
-        return [0, 0, 255]  # Blue for cooler temperatures
-    elif temperature < 60:
-        return [0, 255, 0]  # Green for moderate temperatures
-    else:
-        return [255, 0, 0]  # Red for warmer temperatures
-
-if menu == "Home":
-    st.title("Environmental Monitoring - Chennai")
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Heat Wave", "In Progress", "Max 23.8°C", delta_color="inverse")
-    col2.metric("CO2 Level", "Acceptable", "473 ppm")
-    col3.metric("PM 2.5 Legal Limits", "Exceeds", "29 µg/m³")
-    col4.metric("PM 10 Legal Limits", "Ok", "32 µg/m³")
-
-    st.header("Current Alerts and Conditions")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown(
-            f"""
-            <div class="metric-box uv_intensity">
-             UV Intensity <b> {uv_index:.1f} </b> High
-            </div>
-            """, unsafe_allow_html=True
-        )
-    with col2:
-        st.markdown(
-            f"""
-            <div class="metric-box temperature">
-            Temperature <b> {weather_data["temperature"]:.1f}°C </b> {weather_data["weather_description"].capitalize()}
-            </div>
-            """, unsafe_allow_html=True
-        )
-    with col3:
-        st.markdown(
-            f"""
-            <div class="metric-box humidity">
-             Humidity <b> {weather_data["humidity"]}% </b> Low Decrement
-            </div>
-            """, unsafe_allow_html=True
-        )
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown(
-            f"""
-            <div class="metric-box pressure">
-             Barometric Pressure <b> {weather_data["pressure"]} hPa </b> Stable
-            </div>
-            """, unsafe_allow_html=True
-        )
-    with col2:
-        st.markdown(
-            """
-            <div class="metric-box air_quality">
-            Air Quality  <b> 28 µg/m³</b> Low Increment
-            </div>
-            """, unsafe_allow_html=True
-        )
-    with col3:
-        st.markdown(
-            """
-            <div class="metric-box air_quality">
-            Extra Metric  <b> Value </b> Placeholder
-            </div>
-            """, unsafe_allow_html=True
-        )
-
-    st.header("Map Selection")
-
-    map_option = st.radio("Select Map", ["Monitoring Points Map", "Thermal Map"])
-
-    if map_option == "Monitoring Points Map":
-        initial_view = pdk.ViewState(latitude=11.0, longitude=78.0, zoom=6)  # Set initial zoom level
-
-# Continuously fetch data and update map
-        response = requests.get(url, stream=True)
-        scatterplot_layer = pdk.Layer(
-            "ScatterplotLayer",
-            data=map_data,
-            get_position='[lon, lat]',
-            get_fill_color='color',
-            get_radius=5000,  # Adjusted radius for visibility
-            pickable=True,  # Allows for tooltips
-        )
-        deck = pdk.Deck(
-            initial_view_state=initial_view,
-            layers=[scatterplot_layer],
-            map_style='mapbox://styles/mapbox/dark-v10',
-            tooltip={"text": "{temperature}°F at [{lat}, {lon}]"},
-        )
-        map_chart=st.pydeck_chart(deck)
-        for line in response.iter_lines():
-            if line:
-                try:
-                    # Decode the line and process it if it starts with "data:"
-                    decoded_line = line.decode('utf-8').strip()
-                    if decoded_line.startswith("data:"):
-                        json_data = decoded_line[5:]  # Strip off "data:" prefix
-                        data = json.loads(json_data)
-
-                        # Check if data is correctly formatted
-                        if isinstance(data, list) and all(isinstance(item, dict) for item in data):
-                            # Convert received data into a DataFrame
-                            new_data = pd.DataFrame(data)
-                            new_data['color'] = new_data['temperature'].apply(get_color)
-
-                            # Replace old data with new data in map_data
-                            map_data = new_data  # Overwrite map_data with new_data
-
-                            # Update the scatterplot layer with the new data
-                            scatterplot_layer.data=map_data
-                            # Update the map chart with the modified layer
-                            deck = pdk.Deck(
-                                initial_view_state=initial_view,
-                                layers=[scatterplot_layer],
-                                map_style='mapbox://styles/mapbox/dark-v10',
-                                tooltip={"text": "{temperature}°F at [{lat}, {lon}]"},
-                            )
-                            map_chart.pydeck_chart(deck)
-                        else:
-                            st.error("Data format is incorrect.")
-                except json.JSONDecodeError:
-                    st.error("Failed to decode JSON. Skipping this data point.")
-                except Exception as e:
-                    st.error(f"An unexpected error occurred: {e}")
-
-            # Optional: Add a small delay to control update rate
-            time.sleep(1)    
-        '''elif map_option == "Thermal Map":
-            st.header("Thermal Map")
-
-            thermal_data = pd.DataFrame(
-                np.random.randn(100, 2) / [50, 50] + [13.0827, 80.2707],
-                columns=['lat', 'lon']
-            )
-            thermal_data['temperature'] = np.random.uniform(25, 40, size=thermal_data.shape[0])
-
-            color_range = [
-                [0, 0, 255, 255],  # Blue
-                [255, 0, 0, 255]   # Red
-            ]
-
-            layer_thermal = pdk.Layer(
-                'HeatmapLayer',
-                data=thermal_data,
-                get_position='[lon, lat]',
-                get_weight='temperature',
-                radius_pixels=50,
-                intensity=1,
-                color_range=color_range
-            )
-
-            st.pydeck_chart(pdk.Deck(
-                map_style='mapbox://styles/mapbox/dark-v10',
-                initial_view_state=pdk.ViewState(
-                    latitude=13.0827,
-                    longitude=80.2707,
-                    zoom=12,
-                    pitch=50,
-                ),
-                layers=[layer_thermal],
-            ))'''
+# Continuously fetch and update data
+try:
+    response = requests.get(url, stream=True)
+    for line in response.iter_lines():
+        if line:
+            try:
+                decoded_line = line.decode('utf-8').strip()
+                if decoded_line.startswith("data:"):
+                    json_data = decoded_line[5:]
+                    data = json.loads(json_data)
+                    
+                    if isinstance(data, list) and all(isinstance(item, dict) for item in data):
+                        # Process new data
+                        new_data = pd.DataFrame(data)
+                        new_data['color'] = new_data['temperature'].apply(get_temperature_color)
+                        
+                        # Replace old map data
+                        map_data = new_data
+                        
+                        # Compute average values for each metric
+                        avg_temp = new_data['temperature'].mean()
+                        avg_uv = new_data['uv'].mean()
+                        avg_humidity = new_data['humidity'].mean()
+                        avg_pressure = new_data['pressure'].mean()
+                        avg_air_quality = new_data['airQuality'].mean()
+                        
+                        # Update real-time metrics on cards (display averages)
+                        temp_metric.metric("Avg Temperature", f"{avg_temp:.2f}°F")
+                        uv_metric.metric("Avg UV Index", f"{avg_uv:.2f}")
+                        hum_metric.metric("Avg Humidity", f"{avg_humidity:.2f}%")
+                        press_metric.metric("Avg Pressure", f"{avg_pressure:.2f} hPa")
+                        air_metric.metric("Avg Air Quality", f"{avg_air_quality:.2f}")
+                        
+                        # Classify points based on the thresholds
+                        critical_count, warning_count, ok_count = classify_points(new_data)
+                        
+                        # Update status metrics
+                        total_points = len(new_data)
+                        critical_metric.markdown(f'<div class="status-card status-critical"><div class="metric-label">Critical</div><div class="metric-value">{critical_count}/{total_points}</div></div>', unsafe_allow_html=True)
+                        warning_metric.markdown(f'<div class="status-card status-warning"><div class="metric-label">Warning</div><div class="metric-value">{warning_count}/{total_points}</div></div>', unsafe_allow_html=True)
+                        ok_metric.markdown(f'<div class="status-card status-ok"><div class="metric-label">OK</div><div class="metric-value">{ok_count}/{total_points}</div></div>', unsafe_allow_html=True)
+                        
+                        # Update scatterplot layer
+                        scatterplot_layer.data = map_data
+                        deck = pdk.Deck(
+                            initial_view_state=initial_view,
+                            layers=[scatterplot_layer],
+                            map_style='mapbox://styles/mapbox/dark-v10',
+                            tooltip={"text": "{temperature}°F at [{lat}, {lon}]"},
+                        )
+                        map_chart.pydeck_chart(deck)
+                    else:
+                        st.error("Data format is incorrect.")
+            except json.JSONDecodeError:
+                st.error("Failed to decode JSON.")
+            except Exception as e:
+                st.error(f"Error: {e}")
+        
+        time.sleep(1)  # Optional delay for smoother updates
+except requests.exceptions.RequestException as e:
+    st.error(f"Failed to connect to the server: {e}")
