@@ -13,7 +13,12 @@ def generate_random_data():
     while True:
         # Create a list of temperature data for all locations
         temperature_data = [
-            {"lon": lon, "lat": lat, "temperature": random.uniform(40, 70)}
+            {"lon": lon, "lat": lat
+            , "temperature": random.uniform(40, 70)
+            ,"uv":random.uniform(4,9)
+            ,"humidity":random.uniform(50,85)
+            ,"pressure":random.uniform(950,1020)
+            ,"airQuality":random.uniform(50,150)}
             for lat, lon in fixed_locations
         ]
         # Convert the list to a JSON string
