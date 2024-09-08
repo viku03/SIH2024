@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 # Define 50 fixed locations in Tamil Nadu, India
 # Tamil Nadu coordinates are approximately between (8.1°N, 76.9°E) and (13.8°N, 80.3°E)
-fixed_locations = [(random.uniform(8.1, 13.8), random.uniform(76.9, 80.3)) for _ in range(250)]
+fixed_locations = [(random.uniform(8.1, 13.8), random.uniform(76.9, 80.3)) for _ in range(50)]
 
 def generate_random_data():
     while True:
