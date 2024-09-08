@@ -85,8 +85,7 @@ air_metric = col_air.empty()
 view_option = st.radio("Select map view", ("Scatter View", "Heatmap View", "Choropleth View"))
 
 # Map initialization
-initial_view = pdk.ViewState(latitude=11.0, longitude=78.0, zoom=6)
-
+initial_view = pdk.ViewState(latitude=12.843125306462428, longitude=80.1545516362617, zoom=16)
 # Scatterplot layer
 scatterplot_layer = pdk.Layer(
     "ScatterplotLayer",
@@ -104,10 +103,13 @@ heatmap_layer = pdk.Layer(
     get_position=['lon', 'lat'],
     get_weight='temperature',  # Assuming temperature is the heatmap metric
     radius_pixels=50,
+    intensity=1,
+    threshold=0.1,
+    opacity = 0.4
 )
 
 # Choropleth layer
-with open("D:/Downloads/TamilNadu.geojson") as f:
+with open("..\JSON\TamilNadu.geojson") as f:
     geojson_data = json.load(f)
 
 choropleth_layer = pdk.Layer(
@@ -206,18 +208,27 @@ try:
                             layer = scatterplot_layer
                         elif view_option == "Heatmap View":
                             layer = heatmap_layer
-                        elif view_option == "Choropleth View":\
+                        elif view_option == "Choropleth View":
                             layer = choropleth_layer
                         
                         # Render the updated map
-                        layer.data = map_data
-                        deck = pdk.Deck(
-                            initial_view_state=initial_view,
-                            layers=[layer],
-                            map_style='mapbox://styles/mapbox/light-v9' if view_option != "Choropleth View" else 'mapbox://styles/mapbox/light-v9',
-                            tooltip={"text": "{temperature}°F at [{lat}, {lon}]"},
-                        )
-                        map_chart.pydeck_chart(deck)
+                        if view_option == "Scatter View" or view_option=="Heatmap View":
+                            layer.data = map_data
+                            deck = pdk.Deck(
+                                initial_view_state=initial_view,
+                                layers=[layer],
+                                map_style='mapbox://styles/mapbox/light-v9' if view_option != "Scatter View" else 'mapbox://styles/mapbox/dark-v11',
+                                tooltip={"text": "{temperature}°F at [{lat}, {lon}]"},
+                            )
+                            map_chart.pydeck_chart(deck)
+                        else:
+                            layer.data = map_data
+                            map_chart.pydeck_chart(pdk.Deck(
+                                layers=[choropleth_layer],
+                                initial_view_state=initial_view,
+                                map_style='mapbox://styles/mapbox/light-v9',  # Choose a suitable Mapbox style
+                            ))
+
                     else:
                         st.error("Data format is incorrect.")
             except json.JSONDecodeError:
