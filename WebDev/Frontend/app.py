@@ -82,7 +82,7 @@ uv_metric = col_uv.empty()
 hum_metric = col_hum.empty()
 press_metric = col_press.empty()
 air_metric = col_air.empty()
-
+view_option = st.radio("Select map view", ("Scatter View", "Heatmap View", "Choropleth View"))
 # Map initialization
 initial_view = pdk.ViewState(latitude=11.0, longitude=78.0, zoom=6)
 
@@ -92,10 +92,24 @@ scatterplot_layer = pdk.Layer(
     data=map_data,
     get_position='[lon, lat]',
     get_fill_color='color',
-    get_radius=5000,
+    get_radius=3000,
     pickable=True,
 )
-
+heatmap_layer = pdk.Layer(
+    'HeatmapLayer',
+    data=map_data,
+    get_position=['lon', 'lat'],
+    get_weight='value',
+    radius_pixels=20,
+)
+choropleth_layer = pdk.Layer(
+    'GeoJsonLayer',
+    data=map_data,
+    get_fill_color=[255, 0, 0, 100],
+    get_line_color=[0, 0, 0],
+    line_width_min_pixels=1,
+    pickable=True,
+)
 deck = pdk.Deck(
     initial_view_state=initial_view,
     layers=[scatterplot_layer],
@@ -166,10 +180,16 @@ try:
                         ok_metric.markdown(f'<div class="status-card status-ok"><div class="metric-label">OK</div><div class="metric-value">{ok_count}/{total_points}</div></div>', unsafe_allow_html=True)
                         
                         # Update scatterplot layer
-                        scatterplot_layer.data = map_data
+                        if view_option=="Scatter View":
+                            layer=scatterplot_layer
+                        if view_option=="Heatmap View":
+                            layer=heatmap_layer
+                        if view_option=="Choropleth View":
+                            layer=choropleth_layer
+                        layer.data = map_data
                         deck = pdk.Deck(
                             initial_view_state=initial_view,
-                            layers=[scatterplot_layer],
+                            layers=[layer],
                             map_style='mapbox://styles/mapbox/dark-v10',
                             tooltip={"text": "{temperature}°F at [{lat}, {lon}]"},
                         )
