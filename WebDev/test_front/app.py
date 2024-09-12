@@ -47,11 +47,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Define thresholds for parameters
-TEMP_CRITICAL, TEMP_WARNING = 80, 60
-UV_CRITICAL, UV_WARNING = 8, 5
-HUMIDITY_CRITICAL, HUMIDITY_WARNING = 90, 70
-PRESSURE_CRITICAL, PRESSURE_WARNING = 1020, 1000
-AIR_QUALITY_CRITICAL, AIR_QUALITY_WARNING = 150, 100
+TEMP_CRITICAL, TEMP_WARNING = 1000, 1000
+UV_CRITICAL, UV_WARNING = 600, 400
+HUMIDITY_CRITICAL, HUMIDITY_WARNING = 9000, 7000
+PRESSURE_CRITICAL, PRESSURE_WARNING = 120000, 110000
+AIR_QUALITY_CRITICAL, AIR_QUALITY_WARNING = 2000, 1500
 
 # Function to assign colors based on temperature
 def get_temperature_color(temp):
@@ -82,7 +82,7 @@ press_metric = col_press.empty()
 air_metric = col_air.empty()
 
 # View selection for map visualization
-view_option = st.radio("Select map view", ("Scatter View", "Heatmap View", "Choropleth View"))
+view_option = st.radio("Select map view", ("Scatter View", "Heatmap View"))
 
 # Map initialization
 initial_view = pdk.ViewState(latitude=12.843125306462428, longitude=80.1545516362617, zoom=16)
@@ -92,7 +92,7 @@ scatterplot_layer = pdk.Layer(
     data=map_data,
     get_position='[lon, lat]',
     get_fill_color='color',
-    get_radius=3000,
+    get_radius=10,
     pickable=True,
 )
 
@@ -109,7 +109,7 @@ heatmap_layer = pdk.Layer(
 )
 
 # Choropleth layer
-with open("..\JSON\TamilNadu.geojson") as f:
+with open("../JSON/TamilNadu.geojson") as f:
     geojson_data = json.load(f)
 
 choropleth_layer = pdk.Layer(
@@ -218,7 +218,7 @@ try:
                                 initial_view_state=initial_view,
                                 layers=[layer],
                                 map_style='mapbox://styles/mapbox/light-v9' if view_option != "Scatter View" else 'mapbox://styles/mapbox/dark-v11',
-                                tooltip={"text": "{temperature}°F at [{lat}, {lon}]"},
+                                tooltip={"text": "Temp:{temperature}°F\nUV Index:{uv}\nHumidity:{humidity}%\nAir Pressure:{pressure}hPa\nAir Quality:{airQuality}\n at [{lat}, {lon}]"},
                             )
                             map_chart.pydeck_chart(deck)
                         else:
@@ -227,6 +227,7 @@ try:
                                 layers=[choropleth_layer],
                                 initial_view_state=initial_view,
                                 map_style='mapbox://styles/mapbox/light-v9',  # Choose a suitable Mapbox style
+                                tooltip={"text": "Temp:{temperature}°F\nUV Index:{uv}\nHumidity:{humidity}%\nAir Pressure:{pressure}hPa\nAir Quality:{airQuality}\n at [{lat}, {lon}]"},
                             ))
 
                     else:
